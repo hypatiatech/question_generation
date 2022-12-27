@@ -1,5 +1,6 @@
 import itertools
 import logging
+import re
 from typing import Optional, Dict, Union
 
 from nltk import sent_tokenize
@@ -90,6 +91,9 @@ class QGPipeline:
         dec = [self.ans_tokenizer.decode(ids, skip_special_tokens=False) for ids in outs]
         answers = [item.split('<sep>') for item in dec]
         answers = [i[:-1] for i in answers]
+        # remove all tags from answers like <hl> and <pad> using regex
+        answers = [[re.sub(r'<[^>]*>', '', ans) for ans in item] for item in answers]
+        answers = [[ans.strip() for ans in item] for item in answers]
         
         return sents, answers
     
@@ -134,20 +138,25 @@ class QGPipeline:
         for i, answer in enumerate(answers):
             if len(answer) == 0: continue
             for answer_text in answer:
-                sent = sents[i]
-                sents_copy = sents[:]
-                
-                answer_text = answer_text.strip()
-                
-                ans_start_idx = sent.index(answer_text)
-                
-                sent = f"{sent[:ans_start_idx]} <hl> {answer_text} <hl> {sent[ans_start_idx + len(answer_text): ]}"
-                sents_copy[i] = sent
-                
-                source_text = " ".join(sents_copy)
-                source_text = f"generate question: {source_text}" 
-                if self.model_type == "t5":
-                    source_text = source_text + " </s>"
+                try: 
+                    sent = sents[i]
+                    sents_copy = sents[:]
+                    
+                    answer_text = answer_text.strip()
+                    print("answer_text: " + answer_text)
+                    print("sent: " + sent)
+                    ans_start_idx = sent.index(answer_text)
+                    
+                    sent = f"{sent[:ans_start_idx]} <hl> {answer_text} <hl> {sent[ans_start_idx + len(answer_text): ]}"
+                    sents_copy[i] = sent
+                    
+                    source_text = " ".join(sents_copy)
+                    source_text = f"generate question: {source_text}" 
+                    if self.model_type == "t5":
+                        source_text = source_text + " </s>"
+                except Exception as e:
+                    print(e)
+                    continue
                 
                 inputs.append({"answer": answer_text, "source_text": source_text})
         
